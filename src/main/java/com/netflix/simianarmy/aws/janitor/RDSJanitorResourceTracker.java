@@ -25,6 +25,7 @@ import com.netflix.simianarmy.Resource;
 import com.netflix.simianarmy.Resource.CleanupState;
 import com.netflix.simianarmy.ResourceType;
 import com.netflix.simianarmy.aws.AWSResource;
+import com.netflix.simianarmy.basic.DatabaseConnectionConfiguration;
 import com.netflix.simianarmy.janitor.JanitorResourceTracker;
 import com.zaxxer.hikari.HikariDataSource;
 import org.apache.commons.lang.StringUtils;
@@ -58,15 +59,8 @@ public class RDSJanitorResourceTracker implements JanitorResourceTracker {
      * Instantiates a new RDS janitor resource tracker.
      *
      */
-    public RDSJanitorResourceTracker(String dbDriver, String dbUser,
-			String dbPass, String dbUrl, String dbTable) {
-		HikariDataSource dataSource = new HikariDataSource();
-		dataSource.setDriverClassName(dbDriver);
-		dataSource.setJdbcUrl(dbUrl);
-		dataSource.setUsername(dbUser);
-		dataSource.setPassword(dbPass);
-		dataSource.setMaximumPoolSize(2);
-    	this.jdbcTemplate = new JdbcTemplate(dataSource);
+    public RDSJanitorResourceTracker(DatabaseConnectionConfiguration databaseConnectionConfiguration, String dbTable) {
+    	this.jdbcTemplate = new JdbcTemplate(databaseConnectionConfiguration.createDatasource());
     	this.table = dbTable;
 	}
     

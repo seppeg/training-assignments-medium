@@ -41,6 +41,7 @@ import com.netflix.simianarmy.aws.janitor.rule.snapshot.NoGeneratedAMIRule;
 import com.netflix.simianarmy.aws.janitor.rule.volume.DeleteOnTerminationRule;
 import com.netflix.simianarmy.aws.janitor.rule.volume.OldDetachedVolumeRule;
 import com.netflix.simianarmy.basic.BasicSimianArmyContext;
+import com.netflix.simianarmy.basic.DatabaseConnectionConfiguration;
 import com.netflix.simianarmy.client.edda.EddaClient;
 import com.netflix.simianarmy.janitor.*;
 import org.apache.commons.lang.StringUtils;
@@ -51,6 +52,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static com.netflix.simianarmy.basic.DatabaseConnectionConfiguration.createDatabaseConnnectionConfiguration;
 
 /**
  * The basic implementation of the context class for Janitor monkey.
@@ -99,16 +102,13 @@ public class BasicJanitorMonkeyContext extends BasicSimianArmyContext implements
 
         Set<String> enabledResourceSet = getEnabledResourceSet();
 
-        String dbDriver = configuration().getStr("simianarmy.recorder.db.driver");
-        String dbUser = configuration().getStr("simianarmy.recorder.db.user");
-        String dbPass = configuration().getStr("simianarmy.recorder.db.pass");
-        String dbUrl = configuration().getStr("simianarmy.recorder.db.url");
+        DatabaseConnectionConfiguration databaseConnnectionConfiguration = createDatabaseConnnectionConfiguration(configuration());
         String dbTable = configuration().getStr("simianarmy.janitor.resources.db.table");
         
-        if (dbDriver == null) {       
+        if (databaseConnnectionConfiguration.getDbDriver() == null) {
         	janitorResourceTracker = new SimpleDBJanitorResourceTracker(awsClient(), resourceDomain);
         } else {
-        	RDSJanitorResourceTracker rdsTracker = new RDSJanitorResourceTracker(dbDriver, dbUser, dbPass, dbUrl, dbTable);
+        	RDSJanitorResourceTracker rdsTracker = new RDSJanitorResourceTracker(databaseConnnectionConfiguration, dbTable);
         	rdsTracker.init();
         	janitorResourceTracker = rdsTracker;
         }

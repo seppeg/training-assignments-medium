@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.simianarmy.aws.AWSResource;
+import com.netflix.simianarmy.basic.DatabaseConnectionConfiguration;
 import com.netflix.simianarmy.conformity.Cluster;
 import com.netflix.simianarmy.conformity.Conformity;
 import com.netflix.simianarmy.conformity.ConformityClusterTracker;
@@ -59,16 +60,10 @@ public class RDSConformityClusterTracker implements ConformityClusterTracker {
     /**
      * Instantiates a new RDS db resource tracker.
      *
-     */
-    public RDSConformityClusterTracker(String dbDriver, String dbUser,
-			String dbPass, String dbUrl, String dbTable) {
-		HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setDriverClassName(dbDriver);
-		dataSource.setJdbcUrl(dbUrl);
-		dataSource.setUsername(dbUser);
-		dataSource.setPassword(dbPass);
-		dataSource.setMaximumPoolSize(2);
-    	this.jdbcTemplate = new JdbcTemplate(dataSource);
+	 * @param databaseConnectionConfiguration
+	 */
+    public RDSConformityClusterTracker(DatabaseConnectionConfiguration databaseConnectionConfiguration, String dbTable) {
+    	this.jdbcTemplate = new JdbcTemplate(databaseConnectionConfiguration.createDatasource());
     	this.table = dbTable;
 	}
 

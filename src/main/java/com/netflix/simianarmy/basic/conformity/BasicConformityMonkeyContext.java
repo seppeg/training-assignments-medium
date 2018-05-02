@@ -20,6 +20,7 @@ package com.netflix.simianarmy.basic.conformity;
 import java.util.Collection;
 import java.util.Map;
 
+import com.netflix.simianarmy.basic.DatabaseConnectionConfiguration;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,8 @@ import com.netflix.simianarmy.conformity.ConformityEmailNotifier;
 import com.netflix.simianarmy.conformity.ConformityMonkey;
 import com.netflix.simianarmy.conformity.ConformityRule;
 import com.netflix.simianarmy.conformity.ConformityRuleEngine;
+
+import static com.netflix.simianarmy.basic.DatabaseConnectionConfiguration.createDatabaseConnnectionConfiguration;
 
 /**
  * The basic implementation of the context class for Conformity monkey.
@@ -120,18 +123,14 @@ public class BasicConformityMonkeyContext extends BasicSimianArmyContext impleme
     }
 
     private ConformityClusterTracker createClusterTracker() {
-        String dbDriver = configuration().getStr("simianarmy.recorder.db.driver");
-        String dbUser = configuration().getStr("simianarmy.recorder.db.user");
-        String dbPass = configuration().getStr("simianarmy.recorder.db.pass");
-        String dbUrl = configuration().getStr("simianarmy.recorder.db.url");
         String dbTable = configuration().getStr("simianarmy.conformity.resources.db.table");
         String sdbDomain = configuration().getStrOrElse("simianarmy.conformity.sdb.domain", "SIMIAN_ARMY");
+        DatabaseConnectionConfiguration databaseConnnectionConfiguration = createDatabaseConnnectionConfiguration(configuration());
 
-
-        if (dbDriver == null) {
+        if (databaseConnnectionConfiguration.getDbDriver() == null) {
         	return new SimpleDBConformityClusterTracker(awsClient(), sdbDomain);
         } else {
-        	RDSConformityClusterTracker rdsClusterTracker = new RDSConformityClusterTracker(dbDriver, dbUser, dbPass, dbUrl, dbTable);
+        	RDSConformityClusterTracker rdsClusterTracker = new RDSConformityClusterTracker(databaseConnnectionConfiguration, dbTable);
         	rdsClusterTracker.init();
         	return rdsClusterTracker;
         }

@@ -44,6 +44,8 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+import static com.netflix.simianarmy.basic.DatabaseConnectionConfiguration.createDatabaseConnnectionConfiguration;
+
 /**
  * The Class BasicSimianArmyContext.
  */
@@ -215,13 +217,9 @@ public class BasicSimianArmyContext implements Monkey.Context {
         @SuppressWarnings("rawtypes")
         Class recorderClass = loadClientClass("simianarmy.client.recorder.class");
         if (recorderClass != null && recorderClass.equals(RDSRecorder.class)) {
-            String dbDriver = configuration().getStr("simianarmy.recorder.db.driver");
-            String dbUser = configuration().getStr("simianarmy.recorder.db.user");
-            String dbPass = configuration().getStr("simianarmy.recorder.db.pass");
-            String dbUrl = configuration().getStr("simianarmy.recorder.db.url");
             String dbTable = configuration().getStr("simianarmy.recorder.db.table");
-            
-            RDSRecorder rdsRecorder = new RDSRecorder(dbDriver, dbUser, dbPass, dbUrl, dbTable, client.region());
+
+            RDSRecorder rdsRecorder = new RDSRecorder(createDatabaseConnnectionConfiguration(configuration()), dbTable, client.region());
             rdsRecorder.init();
             setRecorder(rdsRecorder);        	
         } else if (recorderClass == null || recorderClass.equals(SimpleDBRecorder.class)) {
