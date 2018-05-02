@@ -412,11 +412,33 @@ public class EddaImageJanitorCrawler implements JanitorCrawler {
     private void updateReferenceTimeByInstance(String region, List<Resource> batch, long since) {
         LOGGER.info(String.format("Getting the last reference time by instance for batch of size %d", batch.size()));
         String batchUrl = getInstanceBatchUrl(region, batch, since);
-        JsonNode batchResult = null;
-        Map<String, Resource> idToResource = Maps.newHashMap();
-        for (Resource resource : batch) {
-            idToResource.put(resource.getId(), resource);
+        JsonNode batchResult = getBatchResult(batchUrl);
+        logResult(batch, batchResult, new UpdateForInstance());
+    }
+
+    private void logResult(List<Resource> batch, JsonNode batchResult, UpdateByRule updateByRule) {
+        for (Iterator<JsonNode> it = batchResult.getElements(); it.hasNext();) {
+            JsonNode elem = it.next();
+            JsonNode data = elem.get("data");
+            String imageId = data.get("imageId").getTextValue();
+            String instanceId = data.get(updateByRule.config()).getTextValue();
+            JsonNode ltimeNode = elem.get("ltime");
+            if (ltimeNode != null && !ltimeNode.isNull()) {
+                long ltime = ltimeNode.asLong();
+                Resource ami = getIdsToResource(batch).get(imageId);
+                String lastRefTimeByInstance = ami.getAdditionalField(
+                        updateByRule.fieldName());
+                if (lastRefTimeByInstance == null || Long.parseLong(lastRefTimeByInstance) < ltime) {
+                    LOGGER.info(String.format("The last time that the image %s was referenced by %s is %d",
+                            imageId,updateByRule.updatedFor(), instanceId, ltime));
+                    ami.setAdditionalField(updateByRule.fieldName(), String.valueOf(ltime));
+                }
+            }
         }
+    }
+
+    private JsonNode getBatchResult(String batchUrl) {
+        JsonNode batchResult = null;
         try {
             batchResult = eddaClient.getJsonNodeFromUrl(batchUrl);
         } catch (IOException e) {
@@ -426,62 +448,23 @@ public class EddaImageJanitorCrawler implements JanitorCrawler {
             throw new RuntimeException(String.format("Failed to get valid document from %s, got: %s",
                     batchUrl, batchResult));
         }
-        for (Iterator<JsonNode> it = batchResult.getElements(); it.hasNext();) {
-            JsonNode elem = it.next();
-            JsonNode data = elem.get("data");
-            String imageId = data.get("imageId").getTextValue();
-            String instanceId = data.get("instanceId").getTextValue();
-            JsonNode ltimeNode = elem.get("ltime");
-            if (ltimeNode != null && !ltimeNode.isNull()) {
-                long ltime = ltimeNode.asLong();
-                Resource ami = idToResource.get(imageId);
-                String lastRefTimeByInstance = ami.getAdditionalField(
-                        AMI_FIELD_LAST_INSTANCE_REF_TIME);
-                if (lastRefTimeByInstance == null || Long.parseLong(lastRefTimeByInstance) < ltime) {
-                    LOGGER.info(String.format("The last time that the image %s was referenced by instance %s is %d",
-                            imageId, instanceId, ltime));
-                    ami.setAdditionalField(AMI_FIELD_LAST_INSTANCE_REF_TIME, String.valueOf(ltime));
-                }
-            }
-        }
+        return batchResult;
     }
 
     private void updateReferenceTimeByLaunchConfig(String region, List<Resource> batch, long since) {
         LOGGER.info(String.format("Getting the last reference time by launch config for batch of size %d",
                 batch.size()));
         String batchUrl = getLaunchConfigBatchUrl(region, batch, since);
-        JsonNode batchResult = null;
+        JsonNode batchResult = getBatchResult(batchUrl);
+        logResult(batch, batchResult, new UpdateForTime());
+    }
+
+    private Map<String, Resource> getIdsToResource(List<Resource> batch) {
         Map<String, Resource> idToResource = Maps.newHashMap();
         for (Resource resource : batch) {
             idToResource.put(resource.getId(), resource);
         }
-        try {
-            batchResult = eddaClient.getJsonNodeFromUrl(batchUrl);
-        } catch (IOException e) {
-            LOGGER.error("Failed to get response for the batch.", e);
-        }
-        if (batchResult == null || !batchResult.isArray()) {
-            throw new RuntimeException(String.format("Failed to get valid document from %s, got: %s",
-                    batchUrl, batchResult));
-        }
-        for (Iterator<JsonNode> it = batchResult.getElements(); it.hasNext();) {
-            JsonNode elem = it.next();
-            JsonNode data = elem.get("data");
-            String imageId = data.get("imageId").getTextValue();
-            String launchConfigurationName = data.get("launchConfigurationName").getTextValue();
-            JsonNode ltimeNode = elem.get("ltime");
-            if (ltimeNode != null && !ltimeNode.isNull()) {
-                long ltime = ltimeNode.asLong();
-                Resource ami = idToResource.get(imageId);
-                String lastRefTimeByLC = ami.getAdditionalField(AMI_FIELD_LAST_LC_REF_TIME);
-                if (lastRefTimeByLC == null || Long.parseLong(lastRefTimeByLC) < ltime) {
-                    LOGGER.info(String.format(
-                            "The last time that the image %s was referenced by launch config %s is %d",
-                            imageId, launchConfigurationName, ltime));
-                    ami.setAdditionalField(AMI_FIELD_LAST_LC_REF_TIME, String.valueOf(ltime));
-                }
-            }
-        }
+        return idToResource;
     }
 
     private String getInstanceBatchUrl(String region, List<Resource> batch, long since) {
@@ -528,6 +511,48 @@ public class EddaImageJanitorCrawler implements JanitorCrawler {
             return matcher.group(1);
         }
         return null;
+    }
+
+    private interface UpdateByRule {
+        String fieldName();
+        String updatedFor();
+        String config();
+    }
+
+    private class UpdateForInstance implements UpdateByRule{
+
+        @Override
+        public String fieldName() {
+            return AMI_FIELD_LAST_INSTANCE_REF_TIME;
+        }
+
+        @Override
+        public String updatedFor() {
+            return "instance";
+        }
+
+        @Override
+        public String config() {
+            return "instanceId";
+        }
+    }
+
+    private class UpdateForTime implements UpdateByRule{
+
+        @Override
+        public String fieldName() {
+            return AMI_FIELD_LAST_LC_REF_TIME;
+        }
+
+        @Override
+        public String updatedFor() {
+            return "launch config";
+        }
+
+        @Override
+        public String config() {
+            return "launchConfigurationName";
+        }
     }
 
 }
