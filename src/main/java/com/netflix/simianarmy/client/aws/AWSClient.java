@@ -29,10 +29,6 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 import com.amazonaws.services.elasticloadbalancing.model.*;
-import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
-import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersResult;
-import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsRequest;
-import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsResult;
 import com.amazonaws.services.elasticloadbalancing.model.TagDescription;
 import com.amazonaws.services.route53.AmazonRoute53Client;
 import com.amazonaws.services.route53.model.*;
@@ -85,6 +81,7 @@ public class AWSClient implements CloudClient {
     private final AWSCredentialsProvider awsCredentialsProvider;
 
     private final ClientConfiguration awsClientConfig;
+    private final ElasticLoadBalancer elasticLoadBalancer;
 
     private ComputeService jcloudsComputeService;
     
@@ -123,10 +120,8 @@ public class AWSClient implements CloudClient {
      * @see com.netflix.simianarmy.basic.BasicSimianArmyContext#exportCredentials(String, String)
      */
     public AWSClient(String region) {
-        this.region = region;
-        this.accountName = "Default";
-        this.awsCredentialsProvider = null;
-        this.awsClientConfig = null;
+        this(region,"Default", null, null);
+
     }
 
     /**
@@ -137,10 +132,7 @@ public class AWSClient implements CloudClient {
      *          the AWS credentials provider
      */
     public AWSClient(String region, AWSCredentialsProvider awsCredentialsProvider) {
-        this.region = region;
-        this.accountName = "Default";
-        this.awsCredentialsProvider = awsCredentialsProvider;
-        this.awsClientConfig = null;
+        this(region,"Default",awsCredentialsProvider,null);
     }
 
     /**
@@ -151,10 +143,7 @@ public class AWSClient implements CloudClient {
      *          the AWS client configuration
      */
     public AWSClient(String region, ClientConfiguration awsClientConfig) {
-        this.region = region;
-        this.accountName = "Default";
-        this.awsCredentialsProvider = null;
-        this.awsClientConfig = awsClientConfig;
+        this(region,"Default",null,awsClientConfig);
     }
 
     /**
@@ -167,12 +156,16 @@ public class AWSClient implements CloudClient {
      *          the AWS client configuration
      */
     public AWSClient(String region, AWSCredentialsProvider awsCredentialsProvider, ClientConfiguration awsClientConfig) {
-        this.region = region;
-        this.accountName = "Default";
-        this.awsCredentialsProvider = awsCredentialsProvider;
-        this.awsClientConfig = awsClientConfig;
+        this(region,"Default",awsCredentialsProvider,awsClientConfig);
     }
 
+    private AWSClient(String region, String accountName, AWSCredentialsProvider awsCredentialsProvider, ClientConfiguration awsClientConfig){
+        this.region = region;
+        this.accountName = accountName;
+        this.awsCredentialsProvider = awsCredentialsProvider;
+        this.awsClientConfig = awsClientConfig;
+        this.elasticLoadBalancer = ElasticLoadBalancer.create(awsCredentialsProvider, awsClientConfig, region);
+    }
     /**
      * The Region.
      *
@@ -237,30 +230,6 @@ public class AWSClient implements CloudClient {
             }
         }
         client.setEndpoint("autoscaling." + region + ".amazonaws.com");
-        return client;
-    }
-
-    /**
-     * Amazon ELB client. Abstracted to aid testing.
-     *
-     * @return the Amazon ELB client
-     */
-    protected AmazonElasticLoadBalancingClient elbClient() {
-        AmazonElasticLoadBalancingClient client;
-        if (awsClientConfig == null) {
-            if (awsCredentialsProvider == null) {
-                client = new AmazonElasticLoadBalancingClient();
-            } else {
-                client = new AmazonElasticLoadBalancingClient(awsCredentialsProvider);
-            }
-        } else {
-            if (awsCredentialsProvider == null) {
-                client = new AmazonElasticLoadBalancingClient(awsClientConfig);
-            } else {
-                client = new AmazonElasticLoadBalancingClient(awsCredentialsProvider, awsClientConfig);
-            }
-        }
-        client.setEndpoint("elasticloadbalancing." + region + ".amazonaws.com");
         return client;
     }
 
@@ -367,18 +336,7 @@ public class AWSClient implements CloudClient {
      * @return the ELBs
      */
     public List<LoadBalancerDescription> describeElasticLoadBalancers(String... names) {
-        if (names == null || names.length == 0) {
-            LOGGER.info(String.format("Getting all ELBs in region %s.", region));
-        } else {
-            LOGGER.info(String.format("Getting ELBs for %d names in region %s.", names.length, region));
-        }
-
-        AmazonElasticLoadBalancingClient elbClient = elbClient();
-        DescribeLoadBalancersRequest request = new DescribeLoadBalancersRequest().withLoadBalancerNames(names);
-        DescribeLoadBalancersResult result = elbClient.describeLoadBalancers(request);
-        List<LoadBalancerDescription> elbs = result.getLoadBalancerDescriptions();
-        LOGGER.info(String.format("Got %d ELBs in region %s.", elbs.size(), region));
-        return elbs;
+        return elasticLoadBalancer.describeElasticLoadBalancers(names);
     }
 
     /**
@@ -388,13 +346,7 @@ public class AWSClient implements CloudClient {
      * @return the ELBs
      */
     public LoadBalancerAttributes describeElasticLoadBalancerAttributes(String name) {
-        LOGGER.info(String.format("Getting attributes for ELB with name '%s' in region %s.", name, region));
-        AmazonElasticLoadBalancingClient elbClient = elbClient();
-        DescribeLoadBalancerAttributesRequest request = new DescribeLoadBalancerAttributesRequest().withLoadBalancerName(name);
-        DescribeLoadBalancerAttributesResult result = elbClient.describeLoadBalancerAttributes(request);
-        LoadBalancerAttributes attrs = result.getLoadBalancerAttributes();
-        LOGGER.info(String.format("Got attributes for ELB with name '%s' in region %s.", name, region));
-        return attrs;
+        return elasticLoadBalancer.describeElasticLoadBalancerAttributes(name);
     }
 
     /**
@@ -404,12 +356,7 @@ public class AWSClient implements CloudClient {
      * @return the ELBs
      */
     public List<TagDescription> describeElasticLoadBalancerTags(String name) {
-        LOGGER.info(String.format("Getting tags for ELB with name '%s' in region %s.", name, region));
-        AmazonElasticLoadBalancingClient elbClient = elbClient();
-        DescribeTagsRequest request = new DescribeTagsRequest().withLoadBalancerNames(name);
-        DescribeTagsResult result = elbClient.describeTags(request);
-        LOGGER.info(String.format("Got tags for ELB with name '%s' in region %s.", name, region));
-        return result.getTagDescriptions();
+        return elasticLoadBalancer.describeElasticLoadBalancerTags(name);
     }
 
     /**
@@ -569,11 +516,7 @@ public class AWSClient implements CloudClient {
     /** {@inheritDoc} */
     @Override
     public void deleteElasticLoadBalancer(String elbId) {
-        Validate.notEmpty(elbId);
-        LOGGER.info(String.format("Deleting ELB %s in region %s.", elbId, region));
-        AmazonElasticLoadBalancingClient elbClient = elbClient();
-        DeleteLoadBalancerRequest request = new DeleteLoadBalancerRequest(elbId);
-        elbClient.deleteLoadBalancer(request);
+        elasticLoadBalancer.deleteElasticLoadBalancer(elbId);
     }
 
     /** {@inheritDoc} */
